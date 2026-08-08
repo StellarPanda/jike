@@ -1,0 +1,118 @@
+from __future__ import annotations
+
+import platform
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from .config import settings
+from .db import check_database, initialize_database
+from .schemas import (
+    CreateDatabaseRequest,
+    DatabaseConnectionDetail,
+    DatabaseConnectionListItem,
+    HealthResponse,
+    MetadataResponse,
+    RefreshMetadataResponse,
+)
+from .services import (
+    create_database,
+    delete_database,
+    get_database,
+    get_metadata,
+    list_databases,
+    refresh_metadata,
+)
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    initialize_database()
+    yield
+
+
+app = FastAPI(
+    title=settings.app_name,
+    version=settings.app_version,
+    lifespan=lifespan,
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=list(settings.allow_origins),
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+@app.get(f"{settings.api_prefix}/health", response_model=HealthResponse)
+def health_check() -> HealthResponse:
+    return HealthResponse(
+        status="ok",
+        app_name=settings.app_name,
+        app_version=settings.app_version,
+        sqlite_path=str(settings.sqlite_path),
+        database_ready=check_database(),
+        python_version=platform.python_version(),
+    )
+
+
+@app.get(
+    f"{settings.api_prefix}/databases",
+    response_model=list[DatabaseConnectionListItem],
+)
+def get_databases() -> list[DatabaseConnectionListItem]:
+    return list_databases()
+
+
+@app.post(
+    f"{settings.api_prefix}/databases",
+    response_model=DatabaseConnectionDetail,
+    status_code=201,
+)
+def create_database_connection(
+    payload: CreateDatabaseRequest,
+) -> DatabaseConnectionDetail:
+    return create_database(payload)
+
+
+@app.get(
+    f"{settings.api_prefix}/databases/{{database_id}}",
+    response_model=DatabaseConnectionDetail,
+)
+def get_database_connection(database_id: str) -> DatabaseConnectionDetail:
+    return get_database(database_id)
+
+
+@app.delete(f"{settings.api_prefix}/databases/{{database_id}}", status_code=204)
+def delete_database_connection(database_id: str) -> None:
+    delete_database(database_id)
+
+
+@app.post(
+    f"{settings.api_prefix}/databases/{{database_id}}/refresh-metadata",
+    response_model=RefreshMetadataResponse,
+)
+def refresh_database_metadata(database_id: str) -> RefreshMetadataResponse:
+    return refresh_metadata(database_id)
+
+
+@app.get(
+    f"{settings.api_prefix}/databases/{{database_id}}/metadata",
+    response_model=MetadataResponse,
+)
+def get_database_metadata(database_id: str) -> MetadataResponse:
+    return get_metadata(database_id)
+
+
+def main() -> None:
+    import uvicorn
+
+    uvicorn.run(
+        "db_query_backend.main:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=True,
+    )
