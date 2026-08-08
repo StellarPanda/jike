@@ -14,15 +14,23 @@ from .schemas import (
     DatabaseConnectionListItem,
     HealthResponse,
     MetadataResponse,
+    QueryExecutionRequest,
+    QueryExecutionResponse,
+    QueryHistoryItem,
+    QueryValidationResponse,
     RefreshMetadataResponse,
+    ValidateQueryRequest,
 )
 from .services import (
     create_database,
     delete_database,
+    execute_sql,
     get_database,
     get_metadata,
+    get_query_history,
     list_databases,
     refresh_metadata,
+    validate_query,
 )
 
 
@@ -105,6 +113,30 @@ def refresh_database_metadata(database_id: str) -> RefreshMetadataResponse:
 )
 def get_database_metadata(database_id: str) -> MetadataResponse:
     return get_metadata(database_id)
+
+
+@app.post(
+    f"{settings.api_prefix}/query/validate",
+    response_model=QueryValidationResponse,
+)
+def validate_database_query(payload: ValidateQueryRequest) -> QueryValidationResponse:
+    return validate_query(payload)
+
+
+@app.post(
+    f"{settings.api_prefix}/query/execute",
+    response_model=QueryExecutionResponse,
+)
+def execute_database_query(payload: QueryExecutionRequest) -> QueryExecutionResponse:
+    return execute_sql(payload)
+
+
+@app.get(
+    f"{settings.api_prefix}/databases/{{database_id}}/query-history",
+    response_model=list[QueryHistoryItem],
+)
+def get_database_query_history(database_id: str) -> list[QueryHistoryItem]:
+    return get_query_history(database_id)
 
 
 def main() -> None:

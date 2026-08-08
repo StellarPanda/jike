@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from datetime import date, datetime
+from decimal import Decimal
 from typing import Any
+from uuid import UUID
 
 import psycopg
 
@@ -59,3 +62,36 @@ def fetch_metadata(connection_url: str) -> list[dict[str, Any]]:
             columns = [column.name for column in cursor.description]
 
     return [dict(zip(columns, row, strict=False)) for row in rows]
+
+
+def _serialize_value(value: Any) -> Any:
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return value
+    if isinstance(value, (date, datetime, Decimal, UUID)):
+        return str(value)
+    if isinstance(value, list):
+        return [_serialize_value(item) for item in value]
+    if isinstance(value, tuple):
+        return [_serialize_value(item) for item in value]
+    if isinstance(value, dict):
+        return {str(key): _serialize_value(item) for key, item in value.items()}
+    return str(value)
+
+
+def execute_query(connection_url: str, query_text: str) -> tuple[list[str], list[dict[str, Any]]]:
+    with psycopg.connect(connection_url) as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(query_text)
+            rows = cursor.fetchall()
+            columns = [column.name for column in cursor.description]
+
+    return (
+        columns,
+        [
+            {
+                column: _serialize_value(value)
+                for column, value in zip(columns, row, strict=False)
+            }
+            for row in rows
+        ],
+    )

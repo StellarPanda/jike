@@ -5,7 +5,8 @@ from uuid import uuid4
 
 from fastapi import HTTPException
 
-from .postgres import fetch_metadata, verify_connection
+from .postgres import execute_query, fetch_metadata, verify_connection
+from .query_engine import validate_readonly_query
 from .repositories import execute, executemany, fetch_all, fetch_one
 from .schemas import (
     ColumnMetadataItem,
@@ -13,8 +14,14 @@ from .schemas import (
     DatabaseConnectionDetail,
     DatabaseConnectionListItem,
     MetadataResponse,
+    QueryExecutionRequest,
+    QueryExecutionResponse,
+    QueryHistoryItem,
+    QueryResultColumn,
+    QueryValidationResponse,
     RefreshMetadataResponse,
     TableMetadataItem,
+    ValidateQueryRequest,
 )
 
 
@@ -223,3 +230,84 @@ def get_metadata(database_id: str) -> MetadataResponse:
     ]
 
     return MetadataResponse(tables=tables, columns=columns)
+
+
+def validate_query(payload: ValidateQueryRequest) -> QueryValidationResponse:
+    get_database(payload.database_id)
+    result = validate_readonly_query(payload.query_text)
+
+    return QueryValidationResponse(
+        database_id=payload.database_id,
+        statement_type=result.statement_type,
+        normalized_query=result.normalized_query,
+        applied_limit=result.applied_limit,
+        limit_value=result.limit_value,
+    )
+
+
+def execute_sql(payload: QueryExecutionRequest) -> QueryExecutionResponse:
+    database = get_database(payload.database_id)
+    validated = validate_readonly_query(payload.query_text)
+    now = _now()
+    history_id = str(uuid4())
+
+    try:
+        column_names, rows = execute_query(database.connection_url, validated.normalized_query)
+    except Exception as exc:  # pragma: no cover - depends on external DB
+        execute(
+            """
+            INSERT INTO query_history (
+                id, database_id, query_text, query_source, execution_status, error_message, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                history_id,
+                payload.database_id,
+                validated.normalized_query,
+                payload.query_source,
+                "error",
+                str(exc),
+                now,
+            ),
+        )
+        raise HTTPException(status_code=400, detail=f"Query execution failed: {exc}") from exc
+
+    execute(
+        """
+        INSERT INTO query_history (
+            id, database_id, query_text, query_source, execution_status, error_message, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            history_id,
+            payload.database_id,
+            validated.normalized_query,
+            payload.query_source,
+            "success",
+            None,
+            now,
+        ),
+    )
+
+    return QueryExecutionResponse(
+        database_id=payload.database_id,
+        executed_query=validated.normalized_query,
+        row_count=len(rows),
+        columns=[QueryResultColumn(key=name, title=name) for name in column_names],
+        rows=rows,
+    )
+
+
+def get_query_history(database_id: str) -> list[QueryHistoryItem]:
+    get_database(database_id)
+    rows = fetch_all(
+        """
+        SELECT id, database_id, query_text, query_source, execution_status, error_message, created_at
+        FROM query_history
+        WHERE database_id = ?
+        ORDER BY created_at DESC
+        LIMIT 20
+        """,
+        (database_id,),
+    )
+    return [QueryHistoryItem.model_validate(row) for row in rows]

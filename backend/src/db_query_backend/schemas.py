@@ -69,3 +69,44 @@ class RefreshMetadataResponse(CamelModel):
     database_id: str
     table_count: int
     column_count: int
+
+
+class ValidateQueryRequest(CamelModel):
+    database_id: str
+    query_text: str
+
+
+class QueryExecutionRequest(ValidateQueryRequest):
+    query_source: str = "manual"
+
+
+class QueryValidationResponse(CamelModel):
+    database_id: str
+    statement_type: str
+    normalized_query: str
+    applied_limit: bool
+    limit_value: int
+    is_valid: bool = True
+
+
+class QueryResultColumn(CamelModel):
+    key: str
+    title: str
+
+
+class QueryExecutionResponse(CamelModel):
+    database_id: str
+    executed_query: str
+    row_count: int
+    columns: list[QueryResultColumn]
+    rows: list[dict[str, object | None]]
+
+
+class QueryHistoryItem(CamelModel):
+    id: str
+    database_id: str
+    query_text: str
+    query_source: str
+    execution_status: str
+    error_message: str | None = None
+    created_at: str
