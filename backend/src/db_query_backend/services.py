@@ -7,12 +7,15 @@ from fastapi import HTTPException
 
 from .postgres import execute_query, fetch_metadata, verify_connection
 from .query_engine import validate_readonly_query
+from .llm import build_schema_context, generate_query
 from .repositories import execute, executemany, fetch_all, fetch_one
 from .schemas import (
     ColumnMetadataItem,
     CreateDatabaseRequest,
     DatabaseConnectionDetail,
     DatabaseConnectionListItem,
+    GenerateQueryRequest,
+    GenerateQueryResponse,
     MetadataResponse,
     QueryExecutionRequest,
     QueryExecutionResponse,
@@ -242,6 +245,32 @@ def validate_query(payload: ValidateQueryRequest) -> QueryValidationResponse:
         normalized_query=result.normalized_query,
         applied_limit=result.applied_limit,
         limit_value=result.limit_value,
+    )
+
+
+def generate_sql(payload: GenerateQueryRequest) -> GenerateQueryResponse:
+    if not payload.natural_language.strip():
+        raise HTTPException(status_code=400, detail="Natural language request is required")
+
+    get_database(payload.database_id)
+    metadata = get_metadata(payload.database_id)
+    tables = [table.model_dump() for table in metadata.tables]
+    columns = [column.model_dump() for column in metadata.columns]
+    generated = generate_query(
+        payload.natural_language,
+        build_schema_context(tables, columns),
+    )
+    validated = validate_readonly_query(generated.query_text)
+
+    return GenerateQueryResponse(
+        database_id=payload.database_id,
+        natural_language=payload.natural_language,
+        generated_query=generated.query_text,
+        normalized_query=validated.normalized_query,
+        statement_type=validated.statement_type,
+        applied_limit=validated.applied_limit,
+        limit_value=validated.limit_value,
+        model=generated.model,
     )
 
 

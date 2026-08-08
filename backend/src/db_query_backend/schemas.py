@@ -76,6 +76,11 @@ class ValidateQueryRequest(CamelModel):
     query_text: str
 
 
+class GenerateQueryRequest(CamelModel):
+    database_id: str
+    natural_language: str
+
+
 class QueryExecutionRequest(ValidateQueryRequest):
     query_source: str = "manual"
 
@@ -87,6 +92,17 @@ class QueryValidationResponse(CamelModel):
     applied_limit: bool
     limit_value: int
     is_valid: bool = True
+
+
+class GenerateQueryResponse(CamelModel):
+    database_id: str
+    natural_language: str
+    generated_query: str
+    normalized_query: str
+    statement_type: str
+    applied_limit: bool
+    limit_value: int
+    model: str
 
 
 class QueryResultColumn(CamelModel):

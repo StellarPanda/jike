@@ -68,7 +68,12 @@ postgresql://postgres:postgres@127.0.0.1:5432/db_query_demo
 
 ## 5. 当前未完成能力
 
-- 自然语言生成 SQL
 - 更完整的错误态展示
 - Monaco 风格 SQL 编辑器
 - 更复杂的查询结果交互
+
+## 6. 配置自然语言生成
+
+复制 `backend/.env.example` 为 `backend/.env`，填写 `OPENAI_API_KEY`，然后重启后端。也可以通过 shell 环境变量配置 `OPENAI_API_KEY`、`OPENAI_BASE_URL` 和 `OPENAI_MODEL`。
+
+没有配置 API Key 时，AI Query 页面会保留可用的手写 SQL 功能，并显示明确的配置错误。

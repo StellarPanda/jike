@@ -57,6 +57,11 @@
   font-family: "SFMono-Regular", "JetBrains Mono", monospace;
 }
 
+.helper-copy {
+  margin-bottom: 0;
+  margin-top: 6px;
+}
+
 .normalized-query,
 .history-query {
   margin: 0;

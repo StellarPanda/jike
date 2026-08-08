@@ -12,6 +12,8 @@ from .schemas import (
     CreateDatabaseRequest,
     DatabaseConnectionDetail,
     DatabaseConnectionListItem,
+    GenerateQueryRequest,
+    GenerateQueryResponse,
     HealthResponse,
     MetadataResponse,
     QueryExecutionRequest,
@@ -25,6 +27,7 @@ from .services import (
     create_database,
     delete_database,
     execute_sql,
+    generate_sql,
     get_database,
     get_metadata,
     get_query_history,
@@ -129,6 +132,14 @@ def validate_database_query(payload: ValidateQueryRequest) -> QueryValidationRes
 )
 def execute_database_query(payload: QueryExecutionRequest) -> QueryExecutionResponse:
     return execute_sql(payload)
+
+
+@app.post(
+    f"{settings.api_prefix}/query/generate",
+    response_model=GenerateQueryResponse,
+)
+def generate_database_query(payload: GenerateQueryRequest) -> GenerateQueryResponse:
+    return generate_sql(payload)
 
 
 @app.get(

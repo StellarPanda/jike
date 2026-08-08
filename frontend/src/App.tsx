@@ -75,6 +75,12 @@ type QueryValidationResponse = {
   isValid: boolean
 }
 
+type GenerateQueryResponse = QueryValidationResponse & {
+  naturalLanguage: string
+  generatedQuery: string
+  model: string
+}
+
 type QueryExecutionResponse = {
   databaseId: string
   executedQuery: string
@@ -97,7 +103,7 @@ type CreateDatabasePayload = {
   connectionUrl: string
 }
 
-const API_BASE = 'http://127.0.0.1:8000/api/v1'
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000/api/v1'
 const { Content, Header } = Layout
 const { Paragraph, Text, Title } = Typography
 const { TextArea } = Input
@@ -175,6 +181,8 @@ function App() {
   const [metadata, setMetadata] = useState<MetadataResponse | null>(null)
   const [history, setHistory] = useState<QueryHistoryItem[]>([])
   const [queryText, setQueryText] = useState('select * from users')
+  const [naturalLanguage, setNaturalLanguage] = useState('查询所有用户的姓名和邮箱，按注册时间倒序排列')
+  const [generatedQuery, setGeneratedQuery] = useState<GenerateQueryResponse | null>(null)
   const [validatedQuery, setValidatedQuery] = useState<QueryValidationResponse | null>(null)
   const [queryResult, setQueryResult] = useState<QueryExecutionResponse | null>(null)
   const [loading, setLoading] = useState(false)
@@ -182,11 +190,6 @@ function App() {
   const [error, setError] = useState<string | null>(null)
 
   const treeData = useMemo(() => buildTreeData(metadata), [metadata])
-
-  async function loadHealth() {
-    const payload = await apiFetch<HealthResponse>('/health')
-    setHealth(payload)
-  }
 
   async function loadDatabases() {
     const payload = await apiFetch<DatabaseConnectionListItem[]>('/databases')
@@ -232,12 +235,26 @@ function App() {
   }
 
   useEffect(() => {
-    void loadHealth().catch((loadError: unknown) => {
-      setError(loadError instanceof Error ? loadError.message : 'Failed to load health status')
-    })
-    void loadDatabases().catch((loadError: unknown) => {
-      setError(loadError instanceof Error ? loadError.message : 'Failed to load databases')
-    })
+    async function loadInitialData() {
+      try {
+        const healthPayload = await apiFetch<HealthResponse>('/health')
+        setHealth(healthPayload)
+      } catch (loadError) {
+        setError(loadError instanceof Error ? loadError.message : 'Failed to load health status')
+      }
+
+      try {
+        const databasesPayload = await apiFetch<DatabaseConnectionListItem[]>('/databases')
+        setDatabases(databasesPayload)
+        if (databasesPayload.length > 0) {
+          setSelectedDatabaseId(databasesPayload[0].id)
+        }
+      } catch (loadError) {
+        setError(loadError instanceof Error ? loadError.message : 'Failed to load databases')
+      }
+    }
+
+    void loadInitialData()
   }, [])
 
   useEffect(() => {
@@ -318,7 +335,7 @@ function App() {
     }
   }
 
-  async function handleExecuteQuery() {
+  async function executeQuery(queryValue: string, querySource: string) {
     if (!selectedDatabaseId) {
       message.warning('请先选择一个数据库连接')
       return
@@ -330,8 +347,8 @@ function App() {
         method: 'POST',
         body: JSON.stringify({
           databaseId: selectedDatabaseId,
-          queryText,
-          querySource: 'manual',
+          queryText: queryValue,
+          querySource,
         }),
       })
 
@@ -353,6 +370,46 @@ function App() {
     } finally {
       setQueryLoading(false)
     }
+  }
+
+  async function handleExecuteQuery() {
+    await executeQuery(queryText, 'manual')
+  }
+
+  async function handleGenerateQuery() {
+    if (!selectedDatabaseId) {
+      message.warning('请先选择一个数据库连接')
+      return
+    }
+
+    setQueryLoading(true)
+    setError(null)
+    try {
+      const payload = await apiFetch<GenerateQueryResponse>('/query/generate', {
+        method: 'POST',
+        body: JSON.stringify({
+          databaseId: selectedDatabaseId,
+          naturalLanguage,
+        }),
+      })
+      setGeneratedQuery(payload)
+      setQueryText(payload.normalizedQuery)
+      setValidatedQuery(payload)
+      message.success('SQL 已生成并通过安全校验')
+    } catch (generateError) {
+      const messageText = generateError instanceof Error ? generateError.message : 'Unknown error'
+      setError(messageText)
+      message.error(messageText)
+    } finally {
+      setQueryLoading(false)
+    }
+  }
+
+  async function handleExecuteGeneratedQuery() {
+    if (!generatedQuery) {
+      return
+    }
+    await executeQuery(generatedQuery.normalizedQuery, 'natural_language')
   }
 
   const resultColumns =
@@ -525,6 +582,52 @@ function App() {
                             pagination={{ pageSize: 10 }}
                             locale={{ emptyText: '执行查询后，结果会显示在这里' }}
                           />
+                        </Space>
+                      </Card>
+                    ),
+                  },
+                  {
+                    key: 'ai-query',
+                    label: 'AI Query',
+                    children: (
+                      <Card className="panel-card">
+                        <Space direction="vertical" size={16} className="stack-full">
+                          <div>
+                            <Text strong>用自然语言描述你想查询的数据</Text>
+                            <Paragraph type="secondary" className="helper-copy">
+                              Schema 会随请求发送给模型，生成的 SQL 仍会经过只读校验和行数限制。
+                            </Paragraph>
+                          </div>
+                          <TextArea
+                            value={naturalLanguage}
+                            onChange={(event) => setNaturalLanguage(event.target.value)}
+                            rows={4}
+                            placeholder="例如：查询每个用户的订单总金额，并按金额从高到低排列"
+                          />
+                          <Space wrap>
+                            <Button type="primary" onClick={() => void handleGenerateQuery()} loading={queryLoading}>
+                              生成 SQL
+                            </Button>
+                            <Button
+                              onClick={() => void handleExecuteGeneratedQuery()}
+                              disabled={!generatedQuery}
+                              loading={queryLoading}
+                            >
+                              执行生成结果
+                            </Button>
+                          </Space>
+                          {generatedQuery ? (
+                            <Alert
+                              type="success"
+                              showIcon
+                              message={`已通过安全校验 · ${generatedQuery.model}`}
+                              description={
+                                <pre className="normalized-query">{generatedQuery.normalizedQuery}</pre>
+                              }
+                            />
+                          ) : (
+                            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="生成结果会显示在这里" />
+                          )}
                         </Space>
                       </Card>
                     ),
