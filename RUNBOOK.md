@@ -59,6 +59,7 @@ postgresql://postgres:postgres@127.0.0.1:5432/db_query_demo
 ## 4. 当前已实现能力
 
 - 添加 PostgreSQL 连接
+- 删除 PostgreSQL 连接
 - 拉取表和列元数据
 - 展示 Schema 树
 - 校验只读 SQL
@@ -74,6 +75,6 @@ postgresql://postgres:postgres@127.0.0.1:5432/db_query_demo
 
 ## 6. 配置自然语言生成
 
-复制 `backend/.env.example` 为 `backend/.env`，填写 `OPENAI_API_KEY`，然后重启后端。也可以通过 shell 环境变量配置 `OPENAI_API_KEY`、`OPENAI_BASE_URL` 和 `OPENAI_MODEL`。
+复制 `backend/.env.example` 为 `backend/.env`，填写 `OPENAI_API_KEY`，然后重启后端。也可以通过 shell 环境变量配置 `OPENAI_API_KEY`、`OPENAI_BASE_URL` 和 `OPENAI_MODEL`。前端 API 地址可通过 `frontend/.env` 中的 `VITE_API_BASE_URL` 覆盖。
 
 没有配置 API Key 时，AI Query 页面会保留可用的手写 SQL 功能，并显示明确的配置错误。

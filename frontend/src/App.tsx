@@ -10,6 +10,7 @@ import {
   Input,
   Layout,
   List,
+  Popconfirm,
   Row,
   Space,
   Spin,
@@ -171,6 +172,18 @@ function buildTreeData(metadata: MetadataResponse | null) {
   }))
 }
 
+function maskConnectionUrl(connectionUrl: string) {
+  try {
+    const parsedUrl = new URL(connectionUrl)
+    if (parsedUrl.password) {
+      parsedUrl.password = '****'
+    }
+    return parsedUrl.toString()
+  } catch {
+    return connectionUrl.replace(/:\/\/([^:]+):([^@]+)@/, '://$1:****@')
+  }
+}
+
 function App() {
   const { message } = AntApp.useApp()
   const [form] = Form.useForm<CreateDatabasePayload>()
@@ -302,6 +315,30 @@ function App() {
       message.success('元数据已刷新')
     } catch (refreshError) {
       const messageText = refreshError instanceof Error ? refreshError.message : 'Unknown error'
+      setError(messageText)
+      message.error(messageText)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleDeleteDatabase(databaseId: string) {
+    setLoading(true)
+    setError(null)
+    try {
+      await apiFetch(`/databases/${databaseId}`, { method: 'DELETE' })
+      const remaining = databases.filter((database) => database.id !== databaseId)
+      setDatabases(remaining)
+      setSelectedDatabaseId(remaining[0]?.id ?? null)
+      setSelectedDatabase(null)
+      setMetadata(null)
+      setHistory([])
+      setQueryResult(null)
+      setValidatedQuery(null)
+      setGeneratedQuery(null)
+      message.success('数据库连接已删除')
+    } catch (deleteError) {
+      const messageText = deleteError instanceof Error ? deleteError.message : 'Unknown error'
       setError(messageText)
       message.error(messageText)
     } finally {
@@ -483,6 +520,20 @@ function App() {
                     <List.Item
                       className={database.id === selectedDatabaseId ? 'list-item-active' : 'list-item'}
                       onClick={() => setSelectedDatabaseId(database.id)}
+                      actions={[
+                        <Popconfirm
+                          key="delete"
+                          title="删除这个数据库连接？"
+                          description="本地保存的 Schema 和查询历史也会被删除。"
+                          okText="删除"
+                          cancelText="取消"
+                          onConfirm={() => void handleDeleteDatabase(database.id)}
+                        >
+                          <Button type="link" danger size="small" onClick={(event) => event.stopPropagation()}>
+                            删除
+                          </Button>
+                        </Popconfirm>,
+                      ]}
                     >
                       <List.Item.Meta
                         title={database.name}
@@ -517,7 +568,7 @@ function App() {
               >
                 {selectedDatabase ? (
                   <Paragraph>
-                    <Text strong>Connection URL:</Text> {selectedDatabase.connectionUrl}
+                    <Text strong>Connection URL:</Text> {maskConnectionUrl(selectedDatabase.connectionUrl)}
                   </Paragraph>
                 ) : (
                   <Empty description="先创建或选择一个数据库连接" />
