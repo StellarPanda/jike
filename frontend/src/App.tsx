@@ -766,6 +766,32 @@ function App() {
                           ) : (
                             <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="生成结果会显示在这里" />
                           )}
+                          {queryResult ? (
+                            <>
+                              <Table
+                                size="small"
+                                columns={resultColumns}
+                                dataSource={resultRows}
+                                scroll={{ x: true }}
+                                pagination={{ pageSize: 10 }}
+                                title={() => `查询结果 · ${queryResult.rowCount} 行`}
+                              />
+                              <Space wrap>
+                                <Button
+                                  loading={exportLoading === 'csv'}
+                                  onClick={() => void handleExport('csv')}
+                                >
+                                  导出 CSV
+                                </Button>
+                                <Button
+                                  loading={exportLoading === 'json'}
+                                  onClick={() => void handleExport('json')}
+                                >
+                                  导出 JSON
+                                </Button>
+                              </Space>
+                            </>
+                          ) : null}
                         </Space>
                       </Card>
                     ),
