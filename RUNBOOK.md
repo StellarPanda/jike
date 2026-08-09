@@ -65,6 +65,7 @@ postgresql://postgres:postgres@127.0.0.1:5432/db_query_demo
 - 校验只读 SQL
 - 自动补 `LIMIT 1000`
 - 执行查询并显示结果
+- 将查询结果导出为 CSV 或 JSON
 - 记录最近查询历史
 
 ## 5. 当前未完成能力
@@ -72,6 +73,20 @@ postgresql://postgres:postgres@127.0.0.1:5432/db_query_demo
 - 更完整的错误态展示
 - Monaco 风格 SQL 编辑器
 - 更复杂的查询结果交互
+
+## 7. 数据导出命令
+
+查询接口运行后，可以直接执行：
+
+```bash
+./scripts/export-query.sh \
+  --database-id "<database-id>" \
+  --format csv \
+  --query "select id, name from users order by id" \
+  --output users.csv
+```
+
+前端查询结果区也提供 CSV 和 JSON 下载按钮。详细设计见 [FEATURE_EXPORT.md](FEATURE_EXPORT.md)。
 
 ## 6. 配置自然语言生成
 

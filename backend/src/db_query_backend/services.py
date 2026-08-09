@@ -14,6 +14,7 @@ from .schemas import (
     CreateDatabaseRequest,
     DatabaseConnectionDetail,
     DatabaseConnectionListItem,
+    ExportQueryRequest,
     GenerateQueryRequest,
     GenerateQueryResponse,
     MetadataResponse,
@@ -324,6 +325,16 @@ def execute_sql(payload: QueryExecutionRequest) -> QueryExecutionResponse:
         row_count=len(rows),
         columns=[QueryResultColumn(key=name, title=name) for name in column_names],
         rows=rows,
+    )
+
+
+def export_sql(payload: ExportQueryRequest) -> QueryExecutionResponse:
+    return execute_sql(
+        QueryExecutionRequest(
+            database_id=payload.database_id,
+            query_text=payload.query_text,
+            query_source=payload.query_source,
+        )
     )
 
 

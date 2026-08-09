@@ -9,6 +9,7 @@
 - Schema 导航树
 - 只读 SQL 校验，自动补充 `LIMIT 1000`
 - SQL 执行、结果表格和查询历史
+- 查询结果导出为 CSV 或 JSON
 - OpenAI 兼容接口的自然语言生成 SQL
 - SQLite 保存连接、元数据和查询历史
 
@@ -39,6 +40,20 @@ cp backend/.env.example backend/.env
 在 `backend/.env` 中填写 `OPENAI_API_KEY`。`OPENAI_BASE_URL` 可用于 OpenAI 兼容服务，`OPENAI_MODEL` 用于指定模型。前端 API 地址可通过 `frontend/.env` 中的 `VITE_API_BASE_URL` 覆盖。
 
 未配置 API Key 时，手写 SQL 功能仍可使用，AI Query 会返回明确的配置提示。
+
+## 数据导出
+
+查询成功后，在结果区点击“导出 CSV”或“导出 JSON”。也可以使用命令行：
+
+```bash
+./scripts/export-query.sh \
+  --database-id "<database-id>" \
+  --format csv \
+  --query "select * from users order by id" \
+  --output users.csv
+```
+
+设计说明见 [FEATURE_EXPORT.md](FEATURE_EXPORT.md)。
 
 ## 测试与检查
 

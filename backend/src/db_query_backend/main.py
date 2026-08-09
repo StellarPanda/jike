@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 
 from .config import settings
 from .db import check_database, initialize_database
@@ -12,6 +13,7 @@ from .schemas import (
     CreateDatabaseRequest,
     DatabaseConnectionDetail,
     DatabaseConnectionListItem,
+    ExportQueryRequest,
     GenerateQueryRequest,
     GenerateQueryResponse,
     HealthResponse,
@@ -27,6 +29,7 @@ from .services import (
     create_database,
     delete_database,
     execute_sql,
+    export_sql,
     generate_sql,
     get_database,
     get_metadata,
@@ -55,6 +58,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["Content-Disposition"],
 )
 
 
@@ -132,6 +136,19 @@ def validate_database_query(payload: ValidateQueryRequest) -> QueryValidationRes
 )
 def execute_database_query(payload: QueryExecutionRequest) -> QueryExecutionResponse:
     return execute_sql(payload)
+
+
+@app.post(f"{settings.api_prefix}/query/export")
+def export_database_query(payload: ExportQueryRequest) -> Response:
+    from .exporter import build_export_file
+
+    result = export_sql(payload)
+    content, media_type, filename = build_export_file(result, payload.export_format)
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @app.post(

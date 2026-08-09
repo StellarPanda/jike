@@ -138,6 +138,40 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T
 }
 
+async function downloadExportFile(path: string, init: RequestInit, fallbackFilename: string) {
+  const response = await fetch(`${API_BASE}${path}`, {
+    headers: {
+      'Content-Type': 'application/json',
+      ...(init.headers ?? {}),
+    },
+    ...init,
+  })
+
+  if (!response.ok) {
+    const fallback = `Request failed: ${response.status}`
+    try {
+      const payload = (await response.json()) as { detail?: string }
+      throw new Error(payload.detail || fallback)
+    } catch (error) {
+      if (error instanceof Error && error.message !== fallback) {
+        throw error
+      }
+      throw new Error(fallback)
+    }
+  }
+
+  const blob = await response.blob()
+  const filename = response.headers
+    .get('Content-Disposition')
+    ?.match(/filename="([^"]+)"/)?.[1] ?? fallbackFilename
+  const objectUrl = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = objectUrl
+  anchor.download = filename
+  anchor.click()
+  URL.revokeObjectURL(objectUrl)
+}
+
 function buildTreeData(metadata: MetadataResponse | null) {
   if (!metadata) {
     return []
@@ -198,8 +232,10 @@ function App() {
   const [generatedQuery, setGeneratedQuery] = useState<GenerateQueryResponse | null>(null)
   const [validatedQuery, setValidatedQuery] = useState<QueryValidationResponse | null>(null)
   const [queryResult, setQueryResult] = useState<QueryExecutionResponse | null>(null)
+  const [lastQuerySource, setLastQuerySource] = useState('manual')
   const [loading, setLoading] = useState(false)
   const [queryLoading, setQueryLoading] = useState(false)
+  const [exportLoading, setExportLoading] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const treeData = useMemo(() => buildTreeData(metadata), [metadata])
@@ -390,6 +426,7 @@ function App() {
       })
 
       setQueryResult(payload)
+      setLastQuerySource(querySource)
       setValidatedQuery({
         databaseId: payload.databaseId,
         statementType: 'SELECT',
@@ -447,6 +484,37 @@ function App() {
       return
     }
     await executeQuery(generatedQuery.normalizedQuery, 'natural_language')
+  }
+
+  async function handleExport(format: 'csv' | 'json') {
+    if (!selectedDatabaseId || !queryResult) {
+      return
+    }
+
+    setExportLoading(format)
+    setError(null)
+    try {
+      await downloadExportFile(
+        '/query/export',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            databaseId: selectedDatabaseId,
+            queryText: queryResult.executedQuery,
+            exportFormat: format,
+            querySource: lastQuerySource,
+          }),
+        },
+        `query-result.${format}`,
+      )
+      message.success(`${format.toUpperCase()} 文件已下载`)
+    } catch (exportError) {
+      const messageText = exportError instanceof Error ? exportError.message : 'Unknown error'
+      setError(messageText)
+      message.error(messageText)
+    } finally {
+      setExportLoading(null)
+    }
   }
 
   const resultColumns =
@@ -633,6 +701,25 @@ function App() {
                             pagination={{ pageSize: 10 }}
                             locale={{ emptyText: '执行查询后，结果会显示在这里' }}
                           />
+                          <Space wrap>
+                            <Text type="secondary">
+                              {queryResult ? `最近一次查询返回 ${queryResult.rowCount} 行` : '执行查询后可导出结果'}
+                            </Text>
+                            <Button
+                              disabled={!queryResult}
+                              loading={exportLoading === 'csv'}
+                              onClick={() => void handleExport('csv')}
+                            >
+                              导出 CSV
+                            </Button>
+                            <Button
+                              disabled={!queryResult}
+                              loading={exportLoading === 'json'}
+                              onClick={() => void handleExport('json')}
+                            >
+                              导出 JSON
+                            </Button>
+                          </Space>
                         </Space>
                       </Card>
                     ),

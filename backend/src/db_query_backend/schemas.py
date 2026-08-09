@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict
 
 
@@ -82,6 +84,11 @@ class GenerateQueryRequest(CamelModel):
 
 
 class QueryExecutionRequest(ValidateQueryRequest):
+    query_source: str = "manual"
+
+
+class ExportQueryRequest(ValidateQueryRequest):
+    export_format: Literal["csv", "json"]
     query_source: str = "manual"
 
 
